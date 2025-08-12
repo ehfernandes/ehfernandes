@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zenith ERP - Sistema de Gestão de Stock com IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- PDF Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f3f7fa;
+            color: #4a5568;
+        }
+        .btn-green { background-color: #27ab83; border-color: #27ab83; }
+        .btn-green:hover { background-color: #229470; }
+        .top-nav-item { border-bottom: 2px solid transparent; }
+        .top-nav-item:hover, .top-nav-item.active { border-bottom-color: #3182ce; color: #3182ce; }
+        .tab-button.active { border-bottom-color: #3182ce; color: #3182ce; font-weight: 500; }
+        .action-menu { transition: opacity 0.2s ease, transform 0.2s ease; }
+        .form-input { border: 1px solid #cbd5e0; border-radius: 0.375rem; padding: 0.5rem 0.75rem; transition: border-color 0.2s ease; }
+        .form-input:focus { border-color: #3182ce; outline: none; box-shadow: 0 0 0 1px #3182ce; }
+        .form-label { font-size: 0.875rem; color: #718096; }
+        .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 22px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #27ab83; }
+        input:checked + .slider:before { transform: translateX(18px); }
+        #qr-reader { border: 2px dashed #cbd5e0; border-radius: 8px; }
+        .reader-mode-btn.active { background-color: #3182ce; color: white; }
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        .date-filter-btn.active { background-color: #3182ce; color: white; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media print {
+            body * { visibility: hidden; }
+            #qr-modal-print-section, #qr-modal-print-section * { visibility: visible; }
+            #qr-modal-print-section { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="erp-container" class="flex flex-col h-screen">
+        <!-- Top Navigation -->
+        <header class="bg-white shadow-sm flex-shrink-0 z-10">
+            <div class="px-6 flex items-center justify-between h-16">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-bars text-xl text-gray-600 cursor-pointer"></i>
+                    <h1 class="text-2xl font-bold text-gray-800">Zenith ERP</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <i class="far fa-bell text-xl text-gray-600"></i>
+                    <span id="current-user-name" class="text-sm">Administrador</span>
+                    <i class="far fa-user-circle text-2xl text-gray-600"></i>
+                </div>
+            </div>
+            <nav id="main-nav" class="px-6 flex items-center gap-8 border-b">
+                <a href="#" class="top-nav-item py-3 text-sm font-medium active" data-view="products"><i class="fas fa-box-open mr-2"></i>Cadastros</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="suppliers"><i class="fas fa-truck mr-2"></i>Suprimentos</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="movements"><i class="fas fa-exchange-alt mr-2"></i>Movimentações</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="reports"><i class="fas fa-file-alt mr-2"></i>Relatórios</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="dashboards"><i class="fas fa-chart-pie mr-2"></i>Dashboards</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="qr-reader"><i class="fas fa-qrcode mr-2"></i>Leitor QR Code</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="calculator"><i class="fas fa-calculator mr-2"></i>Calculadora</a>
+                <a href="#" class="top-nav-item py-3 text-sm font-medium text-gray-500" data-view="users" id="nav-users"><i class="fas fa-users-cog mr-2"></i>Utilizadores</a>
+            </nav>
+        </header>
+
+        <!-- Main Content Area -->
+        <div id="view-container" class="flex-1 overflow-y-auto">
+            <!-- Products View -->
+            <main id="products-view" class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="text-sm text-gray-500">... > Produtos</span>
+                        <div class="flex items-center gap-4">
+                             <h2 class="text-2xl font-semibold text-gray-800">Produtos</h2>
+                             <div id="filter-indicator" class="hidden items-center gap-2 text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full">
+                                <i class="fas fa-filter"></i>
+                                <span id="filter-text"></span>
+                                <button id="clear-filter-btn" class="ml-2 font-bold">x</button>
+                             </div>
+                        </div>
+                    </div>
+                    <button id="add-product-btn" class="btn-green text-white font-bold py-2 px-4 rounded-md flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Incluir Cadastro
+                    </button>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th class="p-4 w-10"><input type="checkbox" id="select-all-checkbox"></th>
+                                    <th class="p-4 w-16"></th>
+                                    <th class="p-4">Descrição</th>
+                                    <th class="p-4">Código (SKU)</th>
+                                    <th class="p-4">GTIN/EAN</th>
+                                    <th class="p-4">Estoque</th>
+                                    <th class="p-4">Unidade</th>
+                                    <th class="p-4 w-20 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="product-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Suppliers View -->
+            <main id="suppliers-view" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="text-sm text-gray-500">... > Fornecedores</span>
+                        <h2 class="text-2xl font-semibold text-gray-800">Fornecedores</h2>
+                    </div>
+                    <button id="add-supplier-btn" class="btn-green text-white font-bold py-2 px-4 rounded-md flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Incluir Fornecedor
+                    </button>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th class="p-4">Nome</th>
+                                    <th class="p-4">Contato</th>
+                                    <th class="p-4">Email</th>
+                                    <th class="p-4">Telefone</th>
+                                    <th class="p-4 w-20 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="supplier-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Users View -->
+            <main id="users-view" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <span class="text-sm text-gray-500">... > Utilizadores</span>
+                        <h2 class="text-2xl font-semibold text-gray-800">Gestão de Utilizadores</h2>
+                    </div>
+                    <button id="add-user-btn" class="btn-green text-white font-bold py-2 px-4 rounded-md flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Incluir Utilizador
+                    </button>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th class="p-4">Nome</th>
+                                    <th class="p-4">Email</th>
+                                    <th class="p-4">Nível</th>
+                                    <th class="p-4 w-20 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Dashboards View -->
+            <main id="dashboards-view" class="p-6 hidden h-full">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Dashboard Power BI - Análise de Estoque</h2>
+                <iframe 
+                    title="Supply Chain Analysis Sample" 
+                    width="100%" 
+                    height="100%" 
+                    src="https://app.powerbi.com/view?r=eyJrIjoiYjA0NDIzMDItN2Y5ZS00Y2E3LTk1MDYtODIzYjI3YjYyYjI1IiwidCI6IjE0ZGYxNDRkLWE1Y2YtNDgyNy1iZGU4LTYxYWYyYmY4YjY0NyJ9" 
+                    frameborder="0" 
+                    allowFullScreen="true"
+                    class="min-h-screen">
+                </iframe>
+            </main>
+
+            <!-- Movements View -->
+            <main id="movements-view" class="p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold text-gray-800">Movimentações de Estoque</h2>
+                    <div class="flex items-center gap-2 p-2 bg-white rounded-lg shadow-md">
+                        <select id="move-type-filter" class="form-input text-sm"><option value="all">Todos os Tipos</option><option value="entrada">Entrada</option><option value="saída">Saída</option></select>
+                        <select id="move-product-filter" class="form-input text-sm"><option value="all">Todos os Produtos</option></select>
+                        <input type="date" id="move-date-start-filter" class="form-input text-sm">
+                        <input type="date" id="move-date-end-filter" class="form-input text-sm">
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr><th class="p-4">Produto</th><th class="p-4">Tipo</th><th class="p-4">Quantidade</th><th class="p-4">Unidade</th><th class="p-4">Lote</th><th class="p-4">Responsável</th><th class="p-4">Data</th></tr>
+                            </thead>
+                            <tbody id="movements-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Reports View -->
+            <main id="reports-view" class="p-6 hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Relatórios de Estoque</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-2">Posição de Estoque</h3>
+                        <p class="text-sm text-gray-600 mb-4">Visão geral do valor e quantidade de todos os produtos.</p>
+                        <button class="report-btn bg-blue-500 text-white w-full py-2 rounded-md hover:bg-blue-600" data-report="posicao-estoque">Gerar Relatório</button>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-2">Curva ABC</h3>
+                        <p class="text-sm text-gray-600 mb-4">Classifique produtos pela sua importância em valor.</p>
+                        <button class="report-btn bg-blue-500 text-white w-full py-2 rounded-md hover:bg-blue-600" data-report="curva-abc">Gerar Relatório</button>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-2">Produtos Abaixo do Mínimo</h3>
+                        <p class="text-sm text-gray-600 mb-4">Liste todos os produtos que precisam de reposição.</p>
+                        <button class="report-btn bg-blue-500 text-white w-full py-2 rounded-md hover:bg-blue-600" data-report="abaixo-minimo">Gerar Relatório</button>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-2">Movimentação por Lote</h3>
+                        <p class="text-sm text-gray-600 mb-4">Rastreie a entrada, saída e saldo de cada lote.</p>
+                        <div class="mb-4 relative" id="report-multi-select-container">
+                            <label class="form-label">Filtrar por Produto(s)</label>
+                            <div class="form-input flex items-center gap-1 flex-wrap cursor-text min-w-48" id="report-multi-select-input-box">
+                                <input type="text" id="report-multi-select-search" class="flex-grow outline-none bg-transparent" placeholder="Todos os Produtos">
+                            </div>
+                            <div id="report-multi-select-dropdown" class="absolute z-20 w-full bg-white border rounded-md mt-1 hidden max-h-60 overflow-y-auto"></div>
+                        </div>
+                        <button class="report-btn bg-blue-500 text-white w-full py-2 rounded-md hover:bg-blue-600" data-report="lotes">Gerar Relatório</button>
+                    </div>
+                </div>
+                <div id="report-output" class="bg-white p-4 rounded-lg shadow-md hidden">
+                    <div id="report-toolbar" class="flex justify-end gap-2 mb-4 hidden">
+                        <button id="export-web-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-md flex items-center gap-2"><i class="fas fa-globe"></i> Web</button>
+                        <button id="export-pdf-btn" class="text-sm bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-md flex items-center gap-2"><i class="fas fa-file-pdf"></i> PDF</button>
+                        <button id="export-csv-btn" class="text-sm bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-md flex items-center gap-2"><i class="fas fa-file-excel"></i> Excel (CSV)</button>
+                    </div>
+                    <div id="report-content"></div>
+                </div>
+            </main>
+
+            <!-- QR Reader View -->
+            <main id="qr-reader-view" class="p-6 hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Leitor de QR Code</h2>
+                <div class="mb-4 flex justify-center bg-gray-200 rounded-lg p-1">
+                    <button id="reader-mode-move" class="reader-mode-btn flex-1 py-2 px-4 rounded-md text-sm font-medium active">Movimentar Estoque</button>
+                    <button id="reader-mode-link" class="reader-mode-btn flex-1 py-2 px-4 rounded-md text-sm font-medium">Vincular QR Code a Produto</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-4 rounded-lg shadow-md"><div id="qr-reader" class="w-full"></div><div id="qr-reader-status" class="text-center mt-4 text-gray-600">Aponte a câmara para um QR Code</div></div>
+                    <div id="stock-movement-panel">
+                        <div id="scanned-product-info" class="bg-white p-6 rounded-lg shadow-md hidden">
+                            <h3 class="font-semibold text-lg mb-4">Informações do Produto</h3>
+                            <div class="flex items-center gap-6"><img id="scanned-product-image" src="" alt="Imagem do Produto" class="w-24 h-24 rounded-md object-cover"><div><p id="scanned-product-name" class="font-bold text-xl"></p><p id="scanned-product-sku" class="text-gray-500 font-mono"></p><p class="mt-2">Estoque Atual: <span id="scanned-product-stock" class="font-bold"></span></p></div></div>
+                            <div class="mt-6 grid grid-cols-2 gap-4">
+                                <button id="stock-entry-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-md flex-1 text-lg">ENTRADA</button>
+                                <button id="stock-exit-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-md flex-1 text-lg">SAÍDA</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="link-qr-panel" class="hidden">
+                         <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="font-semibold text-lg mb-4">Vincular QR Code</h3>
+                            <div class="space-y-4">
+                                <div><label for="link-product-select" class="form-label">1. Selecione o Produto</label><select id="link-product-select" class="form-input w-full"></select></div>
+                                <div><label class="form-label">2. Leia o QR Code / Código de Barras</label><p id="link-scanned-code" class="mt-1 p-2 bg-gray-100 rounded-md font-mono text-center text-gray-500">Aguardando leitura...</p></div>
+                                <button id="link-qr-btn" class="w-full btn-green text-white font-bold py-2 px-4 rounded-md disabled:bg-gray-400" disabled>Vincular Código</button>
+                            </div>
+                         </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Calculator View -->
+            <main id="calculator-view" class="p-6 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Calculadora de Densidade</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="mass" class="form-label">Massa (em kg)</label>
+                                <input type="number" id="mass" placeholder="Ex: 100" class="form-input w-full">
+                            </div>
+                            <div>
+                                <label for="volume" class="form-label">Volume (em m³)</label>
+                                <input type="number" id="volume" placeholder="Ex: 10" class="form-input w-full">
+                            </div>
+                            <button id="calculate-density-btn" class="w-full btn-green text-white font-bold py-2 px-4 rounded-md">Calcular Densidade</button>
+                        </div>
+                        <div id="density-result-container" class="mt-6 hidden">
+                            <h3 class="text-lg font-semibold text-center">Resultado</h3>
+                            <p id="density-result" class="text-3xl font-bold text-center mt-2 p-4 bg-gray-100 rounded-lg"></p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Calculadora de Volume (Litros)</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="liquid-mass" class="form-label">Peso Líquido (kg)</label>
+                                <input type="number" id="liquid-mass" placeholder="Ex: 18" class="form-input w-full">
+                            </div>
+                            <div>
+                                <label for="product-density-calc" class="form-label">Densidade do Produto (kg/L)</label>
+                                <input type="number" id="product-density-calc" placeholder="Ex: 0.9" class="form-input w-full">
+                            </div>
+                            <button id="calculate-volume-btn" class="w-full btn-green text-white font-bold py-2 px-4 rounded-md">Calcular Volume</button>
+                        </div>
+                        <div id="volume-result-container" class="mt-6 hidden">
+                            <h3 class="text-lg font-semibold text-center">Resultado</h3>
+                            <p id="volume-result" class="text-3xl font-bold text-center mt-2 p-4 bg-gray-100 rounded-lg"></p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="product-form-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0" role="dialog" aria-modal="true">
+        <div class="modal-content bg-gray-100 rounded-lg shadow-xl w-full max-w-4xl h-[90vh] flex flex-col">
+            <header class="p-4 flex justify-between items-center border-b bg-white">
+                 <h3 id="product-form-title" class="text-lg font-semibold text-gray-700">Incluir Produto</h3>
+            </header>
+            <main class="flex-1 p-6 overflow-y-auto">
+                <form id="product-form">
+                    <input type="hidden" id="product-id">
+                    <div class="grid grid-cols-12 gap-6">
+                        <div class="col-span-3"><div class="w-full h-40 bg-gray-200 rounded-md flex items-center justify-center"><i class="fas fa-image text-4xl text-gray-400"></i></div></div>
+                        <div class="col-span-9 grid grid-cols-4 gap-4">
+                            <div class="col-span-4"><label for="product-name" class="form-label">Nome *</label><input type="text" id="product-name" class="form-input w-full" required></div>
+                            <div class="col-span-2"><label for="product-sku" class="form-label">Código (SKU)</label><input type="text" id="product-sku" class="form-input w-full"></div>
+                            <div class="col-span-2"><label for="product-price" class="form-label">Preço Unitário</label><input type="number" id="product-price" class="form-input w-full" step="0.01"></div>
+                            <div>
+                                <label for="product-unit" class="form-label">Unidade</label>
+                                <select id="product-unit" class="form-input w-full">
+                                    <option>UN</option>
+                                    <option>KG</option>
+                                    <option>L</option>
+                                    <option>M</option>
+                                    <option>M²</option>
+                                    <option>M³</option>
+                                    <option>CX</option>
+                                    <option>PC</option>
+                                </select>
+                            </div>
+                            <div id="product-density-container" class="hidden">
+                                <label for="product-density" class="form-label">Densidade (kg/L)</label>
+                                <input type="number" id="product-density" class="form-input w-full" step="0.001">
+                            </div>
+                            <div><label for="product-situation" class="form-label">Situação</label><label class="switch mt-1"><input type="checkbox" id="product-situation" checked><span class="slider"></span></label></div>
+                        </div>
+                    </div>
+                    <div class="mt-6 border-t pt-4">
+                        <div class="flex items-center gap-6 border-b">
+                            <button type="button" class="tab-button active" data-tab="caracteristicas">Características</button>
+                            <button type="button" class="tab-button" data-tab="estoque">Estoque</button>
+                        </div>
+                        <div id="tab-content" class="mt-6">
+                            <div class="tab-pane active" id="tab-caracteristicas">
+                                <div class="grid grid-cols-4 gap-x-6 gap-y-4">
+                                    <div><label class="form-label" for="product-format">Formato</label><select id="product-format" class="form-input w-full"><option>Simples</option></select></div>
+                                    <div><label class="form-label" for="product-type">Tipo</label><select id="product-type" class="form-input w-full"><option>Produto</option></select></div>
+                                    <div><label class="form-label" for="product-condition">Condição</label><select id="product-condition" class="form-input w-full"><option>Novo</option></select></div>
+                                    <div><label class="form-label" for="product-gtin">GTIN/EAN</label><input type="text" id="product-gtin" class="form-input w-full"></div>
+                                    <div class="col-span-4">
+                                        <label for="product-description" class="form-label">Descrição</label>
+                                        <textarea id="product-description" rows="4" class="form-input w-full"></textarea>
+                                        <button type="button" id="gemini-description-btn" class="mt-2 text-sm bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-md flex items-center gap-2 disabled:opacity-75">
+                                            <span id="gemini-desc-btn-text">✨ Gerar Descrição com IA</span>
+                                            <div id="gemini-desc-spinner" class="spinner hidden"></div>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tab-pane hidden" id="tab-estoque">
+                                 <div class="grid grid-cols-4 gap-6">
+                                    <div><label class="form-label" for="product-stock">Estoque Atual</label><input type="number" id="product-stock" class="form-input w-full"></div>
+                                    <div><label class="form-label" for="stock-min">Mínimo</label><input type="number" id="stock-min" class="form-input w-full"></div>
+                                    <div><label class="form-label" for="stock-max">Máximo</label><input type="number" id="stock-max" class="form-input w-full"></div>
+                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </main>
+            <footer class="p-4 flex justify-start items-center border-t bg-white flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <button type="submit" form="product-form" class="btn-green text-white font-bold py-2 px-5 rounded-md text-sm">Salvar</button>
+                    <button type="button" id="cancel-product-form-btn" class="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-5 rounded-md text-sm">Cancelar</button>
+                    <button type="button" id="back-product-form-btn" class="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-5 rounded-md text-sm">Voltar</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <div id="supplier-form-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0" role="dialog" aria-modal="true">
+        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <header class="p-4 flex justify-between items-center border-b">
+                <h3 id="supplier-form-title" class="text-lg font-semibold">Incluir Fornecedor</h3>
+                <button id="close-supplier-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </header>
+            <main class="p-6">
+                <form id="supplier-form">
+                    <input type="hidden" id="supplier-id">
+                    <div class="space-y-4">
+                        <div><label for="supplier-name" class="form-label">Nome *</label><input type="text" id="supplier-name" class="form-input w-full" required></div>
+                        <div><label for="supplier-contact" class="form-label">Nome do Contato</label><input type="text" id="supplier-contact" class="form-input w-full"></div>
+                        <div><label for="supplier-email" class="form-label">Email</label><input type="email" id="supplier-email" class="form-input w-full"></div>
+                        <div><label for="supplier-phone" class="form-label">Telefone</label><input type="text" id="supplier-phone" class="form-input w-full"></div>
+                        <div><label for="supplier-address" class="form-label">Endereço</label><textarea id="supplier-address" rows="3" class="form-input w-full"></textarea></div>
+                    </div>
+                </form>
+            </main>
+            <footer class="p-4 flex justify-end items-center border-t bg-gray-50">
+                <button type="button" id="cancel-supplier-form-btn" class="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md text-sm mr-2">Cancelar</button>
+                <button type="submit" form="supplier-form" class="btn-green text-white font-bold py-2 px-4 rounded-md text-sm">Salvar</button>
+            </footer>
+        </div>
+    </div>
+
+    <div id="user-form-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0" role="dialog" aria-modal="true">
+        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <header class="p-4 flex justify-between items-center border-b">
+                <h3 id="user-form-title" class="text-lg font-semibold">Incluir Utilizador</h3>
+                <button id="close-user-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </header>
+            <main class="p-6">
+                <form id="user-form">
+                    <input type="hidden" id="user-id">
+                    <div class="space-y-4">
+                        <div><label for="user-name" class="form-label">Nome *</label><input type="text" id="user-name" class="form-input w-full" required></div>
+                        <div><label for="user-email" class="form-label">Email *</label><input type="email" id="user-email" class="form-input w-full" required></div>
+                        <div>
+                            <label for="user-role" class="form-label">Nível</label>
+                            <select id="user-role" class="form-input w-full">
+                                <option value="Utilizador">Utilizador</option>
+                                <option value="Administrador">Administrador</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </main>
+            <footer class="p-4 flex justify-end items-center border-t bg-gray-50">
+                <button type="button" id="cancel-user-form-btn" class="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md text-sm mr-2">Cancelar</button>
+                <button type="submit" form="user-form" class="btn-green text-white font-bold py-2 px-4 rounded-md text-sm">Salvar</button>
+            </footer>
+        </div>
+    </div>
+    
+    <div id="qr-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center hidden opacity-0" role="dialog" aria-modal="true">
+        <div class="modal-content bg-white rounded-lg shadow-xl p-8 w-full max-w-sm">
+             <div id="qr-modal-print-section">
+                <h3 id="qr-modal-title" class="text-2xl font-bold text-center mb-4"></h3>
+                <div id="qr-code-container" class="w-52 h-52 mx-auto p-4 bg-white rounded-md flex justify-center items-center"></div>
+                <p id="qr-modal-sku" class="text-center text-gray-600 font-mono mt-4"></p>
+                <p class="text-center text-sm text-gray-500 mt-1">Aponte a câmara do leitor para este código.</p>
+            </div>
+            <div class="flex justify-center gap-4 mt-8">
+                <button id="close-qr-modal-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-md">Fechar</button>
+                <button id="print-qr-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md flex items-center gap-2"><i class="fas fa-print"></i>Imprimir</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="stock-movement-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0" role="dialog" aria-modal="true">
+        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <header class="p-4 flex justify-between items-center border-b">
+                <h3 id="stock-movement-title" class="text-lg font-semibold">Movimentar Estoque</h3>
+                <button id="close-movement-modal-btn" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </header>
+            <main class="p-6">
+                <form id="stock-movement-form">
+                    <p class="mb-4">Produto: <span id="movement-product-name" class="font-bold"></span></p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label for="movement-quantity" class="form-label">Quantidade *</label><input type="number" id="movement-quantity" class="form-input w-full" required></div>
+                        <div>
+                            <label for="movement-unit" class="form-label">Unidade</label>
+                            <select id="movement-unit" class="form-input w-full">
+                                <option>UN</option>
+                                <option>KG</option>
+                                <option>L</option>
+                                <option>M</option>
+                                <option>M²</option>
+                                <option>M³</option>
+                                <option>CX</option>
+                                <option>PC</option>
+                            </select>
+                        </div>
+                        <div><label for="movement-batch" class="form-label">Lote</label><input type="text" id="movement-batch" class="form-input w-full"></div>
+                        <div><label for="movement-date" class="form-label">Data de Recebimento</label><input type="date" id="movement-date" class="form-input w-full"></div>
+                        <div><label for="movement-supplier" class="form-label">Fornecedor</label><select id="movement-supplier" class="form-input w-full"></select></div>
+                        <div class="col-span-2"><label for="movement-responsible" class="form-label">Responsável</label><input type="text" id="movement-responsible" class="form-input w-full"></div>
+                    </div>
+                </form>
+            </main>
+            <footer class="p-4 flex justify-end items-center border-t bg-gray-50">
+                <button type="button" id="cancel-movement-form-btn" class="bg-white border border-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md text-sm mr-2">Cancelar</button>
+                <button type="submit" form="stock-movement-form" class="btn-green text-white font-bold py-2 px-4 rounded-md text-sm">Salvar</button>
+            </footer>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- State (Simulated Backend) ---
+        let products = [
+            { id: 1, name: 'Caneca Bling Branca', sku: 'Comp5', gtin: '', unit: 'UN', price: 54.00, stock: 47, image: 'https://placehold.co/100x100/3498db/ffffff?text=C', description: '', minStock: 10, maxStock: 100, density: null },
+            { id: 2, name: 'Caneca Bling Verde', sku: 'COMP4', gtin: '7891234567890', unit: 'UN', price: 54.00, stock: 50, image: 'https://placehold.co/100x100/2ecc71/ffffff?text=C', description: '', minStock: 10, maxStock: 100, density: null },
+            { id: 3, name: 'Camiseta Dry Fit', sku: 'cami01', gtin: '', unit: 'UN', price: 67.00, stock: 3, image: 'https://placehold.co/100x100/9b59b6/ffffff?text=C', description: '', minStock: 5, maxStock: 50, density: null },
+            { id: 4, name: 'Caneta Bling', sku: 'BONE01', gtin: '', unit: 'UN', price: 1.00, stock: 49, image: 'https://placehold.co/100x100/e74c3c/ffffff?text=C', description: '', minStock: 20, maxStock: 200, density: null },
+            { id: 5, name: 'Monitor Gamer', sku: 'MON-01', gtin: '', unit: 'UN', price: 1250.00, stock: 15, image: 'https://placehold.co/100x100/f1c40f/ffffff?text=M', description: '', minStock: 5, maxStock: 20, density: null },
+            { id: 6, name: 'Cadeira Gamer', sku: 'CAD-02', gtin: '', unit: 'UN', price: 950.00, stock: 8, image: 'https://placehold.co/100x100/e67e22/ffffff?text=C', description: '', minStock: 3, maxStock: 10, density: null }
+        ];
+        let suppliers = [
+            { id: 1, name: 'Fornecedor A', contactName: 'Carlos', email: 'carlos@fornecedora.com', phone: '11 98765-4321', address: 'Rua das Flores, 123' },
+            { id: 2, name: 'Distribuidora B', contactName: 'Beatriz', email: 'beatriz@distb.com', phone: '21 91234-5678', address: 'Av. Principal, 456' }
+        ];
+        let users = [
+            { id: 1, name: 'Administrador', email: 'admin@zenith.com', role: 'Administrador' },
+            { id: 2, name: 'Utilizador Padrão', email: 'user@zenith.com', role: 'Utilizador' }
+        ];
+        let currentUser = null;
+        let stockMovements = [];
+        let qrCodeInstance = null, html5QrCode = null, currentScannedProduct = null, valueByProductChart = null;
+        let currentReaderMode = 'move';
+        let codeToLink = null;
+        let currentMovementType = 'entrada';
+        let selectedMovementProducts = [];
+        let selectedReportProducts = [];
+
+        // --- Selectors ---
+        const mainNav = document.getElementById('main-nav'), viewContainer = document.getElementById('view-container');
+        const productTableBody = document.getElementById('product-table-body'), addProductBtn = document.getElementById('add-product-btn');
+        const supplierTableBody = document.getElementById('supplier-table-body'), addSupplierBtn = document.getElementById('add-supplier-btn');
+        const userTableBody = document.getElementById('user-table-body'), addUserBtn = document.getElementById('add-user-btn');
+        const productFormModal = document.getElementById('product-form-modal'), productForm = document.getElementById('product-form');
+        const supplierFormModal = document.getElementById('supplier-form-modal'), supplierForm = document.getElementById('supplier-form');
+        const userFormModal = document.getElementById('user-form-modal'), userForm = document.getElementById('user-form');
+        const productFormTitle = document.getElementById('product-form-title'), cancelProductFormBtn = document.getElementById('cancel-product-form-btn');
+        const backProductFormBtn = document.getElementById('back-product-form-btn');
+        const cancelSupplierFormBtn = document.getElementById('cancel-supplier-form-btn'), closeSupplierModalBtn = document.getElementById('close-supplier-modal-btn');
+        const cancelUserFormBtn = document.getElementById('cancel-user-form-btn'), closeUserModalBtn = document.getElementById('close-user-modal-btn');
+        const qrModal = document.getElementById('qr-modal'), closeQrModalBtn = document.getElementById('close-qr-modal-btn');
+        const printQrBtn = document.getElementById('print-qr-btn'), qrCodeContainer = document.getElementById('qr-code-container');
+        const qrModalTitle = document.getElementById('qr-modal-title'), qrModalSku = document.getElementById('qr-modal-sku');
+        const scannedProductInfo = document.getElementById('scanned-product-info');
+        const readerModeMoveBtn = document.getElementById('reader-mode-move'), readerModeLinkBtn = document.getElementById('reader-mode-link');
+        const stockMovementPanel = document.getElementById('stock-movement-panel'), linkQrPanel = document.getElementById('link-qr-panel');
+        const linkProductSelect = document.getElementById('link-product-select'), linkScannedCode = document.getElementById('link-scanned-code');
+        const linkQrBtn = document.getElementById('link-qr-btn');
+        const geminiDescBtn = document.getElementById('gemini-description-btn');
+        const filterIndicator = document.getElementById('filter-indicator');
+        const filterText = document.getElementById('filter-text');
+        const clearFilterBtn = document.getElementById('clear-filter-btn');
+        const movementsTableBody = document.getElementById('movements-table-body');
+        const moveTypeFilter = document.getElementById('move-type-filter');
+        const moveProductFilter = document.getElementById('move-product-filter');
+        const moveDateStartFilter = document.getElementById('move-date-start-filter');
+        const moveDateEndFilter = document.getElementById('move-date-end-filter');
+        const reportOutput = document.getElementById('report-output');
+        const stockMovementModal = document.getElementById('stock-movement-modal');
+        const stockMovementForm = document.getElementById('stock-movement-form');
+        const closeMovementModalBtn = document.getElementById('close-movement-modal-btn');
+        const cancelMovementFormBtn = document.getElementById('cancel-movement-form-btn');
+        const reportMultiSelectContainer = document.getElementById('report-multi-select-container');
+        const reportMultiSelectInputBox = document.getElementById('report-multi-select-input-box');
+        const reportMultiSelectSearch = document.getElementById('report-multi-select-search');
+        const reportMultiSelectDropdown = document.getElementById('report-multi-select-dropdown');
+        const erpContainer = document.getElementById('erp-container');
+        const calculateDensityBtn = document.getElementById('calculate-density-btn');
+        const calculateVolumeBtn = document.getElementById('calculate-volume-btn');
+        const productUnitSelect = document.getElementById('product-unit');
+        const densityContainer = document.getElementById('product-density-container');
+        
+        // --- Gemini API Call ---
+        async function callGemini(prompt, button) {
+            const btnText = button.querySelector('span');
+            const spinner = button.querySelector('.spinner');
+            btnText.classList.add('hidden');
+            spinner.classList.remove('hidden');
+            button.disabled = true;
+            const apiKey = ""; // Leave empty
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error("Resposta da API inválida.");
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API Gemini:", error);
+                alert("Ocorreu um erro ao comunicar com a IA. Tente novamente.");
+                return null;
+            } finally {
+                btnText.classList.remove('hidden');
+                spinner.classList.add('hidden');
+                button.disabled = false;
+            }
+        }
+
+        // --- Library Loaders ---
+        function loadQRCodeLibrary() {
+            return new Promise((resolve, reject) => {
+                if (typeof QRCode !== 'undefined') { resolve(); return; }
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error("Falha ao carregar a biblioteca QRCode."));
+                document.head.appendChild(script);
+            });
+        }
+        
+        // --- Render & Update Functions ---
+        function renderProducts(productsToRender = products) {
+            productTableBody.innerHTML = '';
+            productsToRender.forEach(product => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="p-4"><input type="checkbox" class="row-checkbox"></td>
+                    <td class="p-4"><img src="${product.image}" alt="${product.name}" class="w-8 h-8 rounded object-cover"></td>
+                    <td class="p-4 font-medium text-gray-800">${product.name}</td>
+                    <td class="p-4">${product.sku}</td>
+                    <td class="p-4 font-mono">${product.gtin || 'N/A'}</td>
+                    <td class="p-4">${product.stock}</td>
+                    <td class="p-4">${product.unit || 'N/A'}</td>
+                    <td class="p-4 text-center relative">
+                        <button class="action-menu-btn text-gray-500 hover:text-blue-600 p-2"><i class="fas fa-ellipsis-h"></i></button>
+                        <div class="action-menu hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20 opacity-0 transform scale-95">
+                            <a href="#" class="edit-btn block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-id="${product.id}"><i class="fas fa-pencil-alt w-6 mr-2"></i>Editar</a>
+                            <a href="#" class="generate-qr-btn block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-id="${product.id}"><i class="fas fa-qrcode w-6 mr-2"></i>Gerar QR Code</a>
+                            <a href="#" class="delete-btn block px-4 py-2 text-sm text-red-600 hover:bg-red-50" data-id="${product.id}"><i class="fas fa-trash-alt w-6 mr-2"></i>Apagar</a>
+                        </div>
+                    </td>
+                `;
+                productTableBody.appendChild(row);
+            });
+        }
+
+        function renderSuppliers(suppliersToRender = suppliers) {
+            supplierTableBody.innerHTML = '';
+            suppliersToRender.forEach(supplier => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="p-4 font-medium text-gray-800">${supplier.name}</td>
+                    <td class="p-4">${supplier.contactName || ''}</td>
+                    <td class="p-4">${supplier.email || ''}</td>
+                    <td class="p-4">${supplier.phone || ''}</td>
+                    <td class="p-4 text-center relative">
+                        <button class="action-menu-btn text-gray-500 hover:text-blue-600 p-2"><i class="fas fa-ellipsis-h"></i></button>
+                        <div class="action-menu hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20 opacity-0 transform scale-95">
+                            <a href="#" class="edit-supplier-btn block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-id="${supplier.id}"><i class="fas fa-pencil-alt w-6 mr-2"></i>Editar</a>
+                            <a href="#" class="delete-supplier-btn block px-4 py-2 text-sm text-red-600 hover:bg-red-50" data-id="${supplier.id}"><i class="fas fa-trash-alt w-6 mr-2"></i>Apagar</a>
+                        </div>
+                    </td>
+                `;
+                supplierTableBody.appendChild(row);
+            });
+        }
+
+        function renderUsers(usersToRender = users) {
+            userTableBody.innerHTML = '';
+            usersToRender.forEach(user => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="p-4 font-medium text-gray-800">${user.name}</td>
+                    <td class="p-4">${user.email}</td>
+                    <td class="p-4"><span class="px-2 py-1 text-xs rounded-full ${user.role === 'Administrador' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800'}">${user.role}</span></td>
+                    <td class="p-4 text-center relative">
+                        <button class="action-menu-btn text-gray-500 hover:text-blue-600 p-2"><i class="fas fa-ellipsis-h"></i></button>
+                        <div class="action-menu hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20 opacity-0 transform scale-95">
+                            <a href="#" class="edit-user-btn block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-id="${user.id}"><i class="fas fa-pencil-alt w-6 mr-2"></i>Editar</a>
+                            <a href="#" class="delete-user-btn block px-4 py-2 text-sm text-red-600 hover:bg-red-50" data-id="${user.id}"><i class="fas fa-trash-alt w-6 mr-2"></i>Apagar</a>
+                        </div>
+                    </td>
+                `;
+                userTableBody.appendChild(row);
+            });
+        }
+
+        function applyStockLevelFilter(level) {
+            let filteredProducts;
+            let filterDesc = `Nível: ${level}`;
+            if (level === 'Baixo') {
+                filteredProducts = products.filter(p => p.stock > 0 && p.stock < p.minStock);
+            } else if (level === 'Sem Estoque') {
+                filteredProducts = products.filter(p => p.stock === 0);
+            }
+            switchView('products');
+            renderProducts(filteredProducts);
+            filterText.textContent = filterDesc;
+            filterIndicator.style.display = 'flex';
+        }
+
+        function clearProductFilter() {
+            renderProducts();
+            filterIndicator.style.display = 'none';
+        }
+
+        // --- Navigation & View Management ---
+        async function switchView(viewName) {
+            await stopQrScanner();
+            viewContainer.querySelectorAll('main').forEach(view => view.classList.add('hidden'));
+            document.getElementById(`${viewName}-view`).classList.remove('hidden');
+            mainNav.querySelectorAll('a').forEach(link => link.classList.remove('active'));
+            const mainNavLink = mainNav.querySelector(`[data-view="${viewName}"]`);
+            if(mainNavLink) {
+                mainNavLink.classList.add('active');
+            }
+
+            if (viewName === 'qr-reader') {
+                populateLinkProductSelect();
+                await startQrScanner();
+            } else if (viewName === 'movements') {
+                populateMovementFilters();
+                renderMovements();
+            } else if (viewName === 'suppliers') {
+                renderSuppliers();
+            } else if (viewName === 'reports') {
+                populateReportFilters();
+            } else if (viewName === 'users') {
+                renderUsers();
+            }
+        }
+
+        function setReaderMode(mode) {
+            currentReaderMode = mode;
+            if (mode === 'move') {
+                readerModeMoveBtn.classList.add('active');
+                readerModeLinkBtn.classList.remove('active');
+                stockMovementPanel.classList.remove('hidden');
+                linkQrPanel.classList.add('hidden');
+            } else {
+                readerModeMoveBtn.classList.remove('active');
+                readerModeLinkBtn.classList.add('active');
+                stockMovementPanel.classList.add('hidden');
+                linkQrPanel.classList.remove('hidden');
+                scannedProductInfo.classList.add('hidden');
+            }
+            linkScannedCode.textContent = 'Aguardando leitura...';
+            linkQrBtn.disabled = true;
+            codeToLink = null;
+        }
+
+        // --- QR Code Scanner ---
+        async function startQrScanner() {
+            if (html5QrCode && html5QrCode.isScanning) return;
+            document.getElementById('qr-reader-status').textContent = "Iniciando câmara...";
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("qr-reader");
+            
+            try {
+                await html5QrCode.start(
+                    { facingMode: "environment" }, 
+                    { fps: 10, qrbox: { width: 250, height: 250 } }, 
+                    (decodedText, decodedResult) => {
+                        if (currentReaderMode === 'move') handleMoveScan(decodedText);
+                        else handleLinkScan(decodedText);
+                    },
+                    (errorMessage) => { /* ignore errors */ }
+                );
+                document.getElementById('qr-reader-status').textContent = "Aponte a câmara para um QR Code";
+            } catch (err) {
+                document.getElementById('qr-reader-status').textContent = "Erro ao iniciar a câmara.";
+                console.error("Não foi possível iniciar o scanner.", err);
+            }
+        }
+
+        async function stopQrScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                try {
+                    await html5QrCode.stop();
+                } catch (err) {
+                    console.warn("Não foi possível parar o leitor de QR code.", err);
+                }
+            }
+        }
+
+        function handleMoveScan(decodedText) {
+            const product = products.find(p => p.sku === decodedText || p.gtin === decodedText);
+            if (product) {
+                currentScannedProduct = product;
+                document.getElementById('scanned-product-image').src = product.image;
+                document.getElementById('scanned-product-name').textContent = product.name;
+                document.getElementById('scanned-product-sku').textContent = product.sku;
+                document.getElementById('scanned-product-stock').textContent = product.stock;
+                scannedProductInfo.classList.remove('hidden');
+                document.getElementById('qr-reader-status').textContent = `Produto "${product.name}" encontrado!`;
+            } else {
+                document.getElementById('qr-reader-status').textContent = 'Produto não encontrado.';
+                scannedProductInfo.classList.add('hidden');
+                currentScannedProduct = null;
+            }
+        }
+        
+        function handleLinkScan(decodedText) {
+            codeToLink = decodedText;
+            linkScannedCode.textContent = decodedText;
+            linkQrBtn.disabled = false;
+            document.getElementById('qr-reader-status').textContent = `Código ${decodedText} lido com sucesso.`;
+        }
+
+        function openStockMovementModal(type) {
+            if (!currentScannedProduct) return;
+            currentMovementType = type;
+            stockMovementForm.reset();
+            document.getElementById('stock-movement-title').textContent = type === 'entrada' ? 'Registrar Entrada' : 'Registrar Saída';
+            document.getElementById('movement-product-name').textContent = currentScannedProduct.name;
+            document.getElementById('movement-unit').value = currentScannedProduct.unit || 'UN';
+            
+            const supplierSelect = document.getElementById('movement-supplier');
+            supplierSelect.innerHTML = '<option value="">Nenhum</option>';
+            suppliers.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.id;
+                option.textContent = s.name;
+                supplierSelect.appendChild(option);
+            });
+            
+            document.getElementById('movement-date').valueAsDate = new Date();
+            openModal(stockMovementModal);
+        }
+
+        function handleStockMovementSubmit(event) {
+            event.preventDefault();
+            const quantity = parseInt(document.getElementById('movement-quantity').value);
+            const change = currentMovementType === 'entrada' ? 1 : -1;
+
+            if (!isNaN(quantity) && quantity > 0) {
+                const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+                products[productIndex].stock += (change * quantity);
+                
+                const supplierId = parseInt(document.getElementById('movement-supplier').value);
+                const supplier = suppliers.find(s => s.id === supplierId);
+
+                stockMovements.push({
+                    productId: products[productIndex].id,
+                    productName: products[productIndex].name,
+                    type: currentMovementType,
+                    quantity: quantity,
+                    unit: document.getElementById('movement-unit').value,
+                    batch: document.getElementById('movement-batch').value,
+                    date: document.getElementById('movement-date').value,
+                    supplierName: supplier ? supplier.name : '',
+                    responsible: document.getElementById('movement-responsible').value,
+                    timestamp: new Date()
+                });
+
+                document.getElementById('scanned-product-stock').textContent = products[productIndex].stock;
+                renderProducts();
+                closeModal(stockMovementModal);
+            }
+        }
+        
+        function populateLinkProductSelect() {
+            linkProductSelect.innerHTML = '<option value="">Selecione um produto...</option>';
+            products.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = `${p.name} (SKU: ${p.sku})`;
+                linkProductSelect.appendChild(option);
+            });
+        }
+
+        function confirmLinkQrCode() {
+            const productId = parseInt(linkProductSelect.value);
+            if (!productId || !codeToLink) {
+                alert('Selecione um produto e leia um código primeiro.');
+                return;
+            }
+            const productIndex = products.findIndex(p => p.id === productId);
+            if (productIndex !== -1) {
+                products[productIndex].gtin = codeToLink;
+                alert(`O código ${codeToLink} foi vinculado ao produto "${products[productIndex].name}"!`);
+                renderProducts();
+                setReaderMode('move');
+            }
+        }
+
+        // --- Modal & Menu Logic ---
+        function openModal(modal) {
+            modal.classList.remove('hidden', 'opacity-0');
+        }
+
+        function closeModal(modal) {
+            modal.classList.add('hidden', 'opacity-0');
+        }
+        
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.action-menu-btn')) document.querySelectorAll('.action-menu').forEach(menu => menu.classList.add('hidden', 'opacity-0', 'scale-95'));
+            if (e.target.closest('.action-menu-btn')) {
+                const menu = e.target.closest('.relative').querySelector('.action-menu');
+                const isHidden = menu.classList.contains('hidden');
+                document.querySelectorAll('.action-menu').forEach(m => m.classList.add('hidden', 'opacity-0', 'scale-95'));
+                if(isHidden) menu.classList.remove('hidden', 'opacity-0', 'scale-95');
+            }
+        });
+
+        // --- Event Handlers ---
+        function handleTableActions(event) {
+            const link = event.target.closest('a');
+            if (!link) return;
+            event.preventDefault();
+            const id = parseInt(link.dataset.id);
+            if (link.classList.contains('generate-qr-btn')) generateQrCode(id);
+            else if (link.classList.contains('edit-btn')) openEditForm(id);
+            else if (link.classList.contains('delete-btn')) deleteProduct(id);
+            else if (link.classList.contains('edit-supplier-btn')) openEditSupplierForm(id);
+            else if (link.classList.contains('delete-supplier-btn')) deleteSupplier(id);
+            else if (link.classList.contains('edit-user-btn')) openEditUserForm(id);
+            else if (link.classList.contains('delete-user-btn')) deleteUser(id);
+        }
+
+        function openAddForm() {
+            productForm.reset();
+            document.getElementById('product-id').value = '';
+            productFormTitle.textContent = 'Incluir Produto';
+            openModal(productFormModal);
+        }
+        
+        function openEditForm(id) {
+            const product = products.find(p => p.id === id);
+            if (!product) return;
+            document.getElementById('product-id').value = product.id;
+            document.getElementById('product-name').value = product.name;
+            document.getElementById('product-sku').value = product.sku;
+            document.getElementById('product-price').value = product.price;
+            document.getElementById('product-stock').value = product.stock;
+            document.getElementById('product-unit').value = product.unit || 'UN';
+            document.getElementById('product-gtin').value = product.gtin || '';
+            document.getElementById('product-description').value = product.description || '';
+            productFormTitle.textContent = 'Editar Produto';
+            openModal(productFormModal);
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            const id = parseInt(document.getElementById('product-id').value);
+            const formData = {
+                name: document.getElementById('product-name').value,
+                sku: document.getElementById('product-sku').value,
+                price: parseFloat(document.getElementById('product-price').value),
+                stock: parseInt(document.getElementById('product-stock').value),
+                unit: document.getElementById('product-unit').value,
+                gtin: document.getElementById('product-gtin').value,
+                description: document.getElementById('product-description').value,
+                image: 'https://placehold.co/100x100/cccccc/ffffff?text=P'
+            };
+            if (id) {
+                const index = products.findIndex(p => p.id === id);
+                if (index !== -1) products[index] = { ...products[index], ...formData };
+            } else {
+                formData.id = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+                products.push(formData);
+            }
+            renderProducts();
+            closeModal(productFormModal);
+        }
+        
+        function deleteProduct(id) {
+            if (confirm('Tem a certeza que quer apagar este produto?')) {
+                products = products.filter(p => p.id !== id);
+                renderProducts();
+            }
+        }
+
+        function openAddSupplierForm() {
+            supplierForm.reset();
+            document.getElementById('supplier-id').value = '';
+            document.getElementById('supplier-form-title').textContent = 'Incluir Fornecedor';
+            openModal(supplierFormModal);
+        }
+
+        function openEditSupplierForm(id) {
+            const supplier = suppliers.find(s => s.id === id);
+            if (!supplier) return;
+            document.getElementById('supplier-id').value = supplier.id;
+            document.getElementById('supplier-name').value = supplier.name;
+            document.getElementById('supplier-contact').value = supplier.contactName || '';
+            document.getElementById('supplier-email').value = supplier.email || '';
+            document.getElementById('supplier-phone').value = supplier.phone || '';
+            document.getElementById('supplier-address').value = supplier.address || '';
+            document.getElementById('supplier-form-title').textContent = 'Editar Fornecedor';
+            openModal(supplierFormModal);
+        }
+
+        function handleSupplierFormSubmit(event) {
+            event.preventDefault();
+            const id = parseInt(document.getElementById('supplier-id').value);
+            const formData = {
+                name: document.getElementById('supplier-name').value,
+                contactName: document.getElementById('supplier-contact').value,
+                email: document.getElementById('supplier-email').value,
+                phone: document.getElementById('supplier-phone').value,
+                address: document.getElementById('supplier-address').value,
+            };
+            if (id) {
+                const index = suppliers.findIndex(s => s.id === id);
+                if (index !== -1) suppliers[index] = { ...suppliers[index], ...formData };
+            } else {
+                formData.id = suppliers.length > 0 ? Math.max(...suppliers.map(s => s.id)) + 1 : 1;
+                suppliers.push(formData);
+            }
+            renderSuppliers();
+            closeModal(supplierFormModal);
+        }
+
+        function deleteSupplier(id) {
+            if (confirm('Tem a certeza que quer apagar este fornecedor?')) {
+                suppliers = suppliers.filter(s => s.id !== id);
+                renderSuppliers();
+            }
+        }
+
+        function openAddUserForm() {
+            userForm.reset();
+            document.getElementById('user-id').value = '';
+            document.getElementById('user-form-title').textContent = 'Incluir Utilizador';
+            openModal(userFormModal);
+        }
+
+        function openEditUserForm(id) {
+            const user = users.find(u => u.id === id);
+            if (!user) return;
+            document.getElementById('user-id').value = user.id;
+            document.getElementById('user-name').value = user.name;
+            document.getElementById('user-email').value = user.email;
+            document.getElementById('user-role').value = user.role;
+            document.getElementById('user-form-title').textContent = 'Editar Utilizador';
+            openModal(userFormModal);
+        }
+
+        function handleUserFormSubmit(event) {
+            event.preventDefault();
+            const id = parseInt(document.getElementById('user-id').value);
+            const formData = {
+                name: document.getElementById('user-name').value,
+                email: document.getElementById('user-email').value,
+                role: document.getElementById('user-role').value,
+            };
+            if (id) {
+                const index = users.findIndex(u => u.id === id);
+                if (index !== -1) users[index] = { ...users[index], ...formData };
+            } else {
+                formData.id = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+                users.push(formData);
+            }
+            renderUsers();
+            closeModal(userFormModal);
+        }
+
+        function deleteUser(id) {
+            if (id === 1) {
+                alert("Não pode apagar o utilizador administrador principal.");
+                return;
+            }
+            if (confirm('Tem a certeza que quer apagar este utilizador?')) {
+                users = users.filter(u => u.id !== id);
+                renderUsers();
+            }
+        }
+
+
+        async function generateQrCode(id) {
+            const product = products.find(p => p.id === id);
+            if (!product) return;
+            qrModalTitle.textContent = product.name;
+            qrModalSku.textContent = product.sku;
+            qrCodeContainer.innerHTML = '<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>';
+            openModal(qrModal);
+            try {
+                await loadQRCodeLibrary();
+                qrCodeContainer.innerHTML = '';
+                qrCodeInstance = new QRCode(qrCodeContainer, { text: product.sku, width: 208, height: 208 });
+            } catch (error) {
+                qrCodeContainer.innerHTML = '<p class="text-red-500 text-xs">Erro ao gerar QR Code.</p>';
+            }
+        }
+        
+        async function handleGenerateDescription() {
+            const productName = document.getElementById('product-name').value;
+            if (!productName) {
+                alert("Por favor, insira primeiro o nome do produto.");
+                return;
+            }
+            const prompt = `Crie uma descrição de marketing curta e apelativa, com no máximo 3 frases, para o seguinte produto: ${productName}`;
+            const description = await callGemini(prompt, geminiDescBtn);
+            if (description) {
+                document.getElementById('product-description').value = description;
+            }
+        }
+
+        // --- Reports ---
+        function generateReport(reportType) {
+            const reportContent = document.getElementById('report-content');
+            const reportToolbar = document.getElementById('report-toolbar');
+            reportContent.innerHTML = '';
+            reportOutput.classList.remove('hidden');
+            reportToolbar.classList.remove('hidden');
+
+            let html = '';
+            switch(reportType) {
+                case 'posicao-estoque':
+                    html = '<h3 class="font-semibold mb-4">Relatório de Posição de Estoque</h3>';
+                    html += '<table class="w-full text-sm text-left"><thead><tr class="border-b"><th class="p-2">Produto</th><th class="p-2">Estoque</th><th class="p-2">Preço Unit.</th><th class="p-2">Valor Total</th></tr></thead><tbody>';
+                    let totalValue = 0;
+                    products.forEach(p => {
+                        const productValue = p.stock * p.price;
+                        totalValue += productValue;
+                        html += `<tr class="border-b">
+                            <td class="p-2">${p.name}</td>
+                            <td class="p-2">${p.stock}</td>
+                            <td class="p-2">R$ ${p.price.toFixed(2)}</td>
+                            <td class="p-2">R$ ${productValue.toFixed(2)}</td>
+                        </tr>`;
+                    });
+                    html += `</tbody><tfoot><tr class="font-bold bg-gray-100"><td class="p-2" colspan="3">Total Geral</td><td class="p-2">R$ ${totalValue.toFixed(2)}</td></tr></tfoot></table>`;
+                    break;
+                case 'curva-abc':
+                     html = '<h3 class="font-semibold mb-4">Relatório de Curva ABC</h3>';
+                    html += '<table class="w-full text-sm text-left"><thead><tr class="border-b"><th class="p-2">Curva</th><th class="p-2">Produto</th><th class="p-2">Valor Total</th><th class="p-2">% Acumulado</th></tr></thead><tbody>';
+                    const valuedProducts = products.map(p => ({ ...p, totalValue: p.stock * p.price })).sort((a, b) => b.totalValue - a.totalValue);
+                    const grandTotal = valuedProducts.reduce((acc, p) => acc + p.totalValue, 0);
+                    let accumulated = 0;
+                    valuedProducts.forEach(p => {
+                        accumulated += p.totalValue;
+                        const percentage = grandTotal > 0 ? (accumulated / grandTotal) * 100 : 0;
+                        let curve = 'C';
+                        if (percentage <= 80) curve = 'A';
+                        else if (percentage <= 95) curve = 'B';
+                        html += `<tr class="border-b">
+                            <td class="p-2 font-bold">${curve}</td>
+                            <td class="p-2">${p.name}</td>
+                            <td class="p-2">R$ ${p.totalValue.toFixed(2)}</td>
+                            <td class="p-2">${percentage.toFixed(2)}%</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    break;
+                case 'abaixo-minimo':
+                    html = '<h3 class="font-semibold mb-4">Relatório de Produtos Abaixo do Mínimo</h3>';
+                    html += '<table class="w-full text-sm text-left"><thead><tr class="border-b"><th class="p-2">Produto</th><th class="p-2">Estoque Atual</th><th class="p-2">Estoque Mínimo</th></tr></thead><tbody>';
+                    products.filter(p => p.stock < p.minStock).forEach(p => {
+                         html += `<tr class="border-b">
+                            <td class="p-2">${p.name}</td>
+                            <td class="p-2 text-red-600 font-bold">${p.stock}</td>
+                            <td class="p-2">${p.minStock}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    break;
+                case 'lotes':
+                    const selectedProductIds = selectedReportProducts;
+                    html = '<h3 class="font-semibold mb-4">Relatório de Movimentação por Lote</h3>';
+                    html += '<table class="w-full text-sm text-left"><thead><tr class="border-b"><th class="p-2">Produto</th><th class="p-2">Lote</th><th class="p-2">Qtd. Entrada</th><th class="p-2">Qtd. Utilizada</th><th class="p-2">Estoque do Lote</th></tr></thead><tbody>';
+                    
+                    const movementsToProcess = selectedProductIds.length === 0
+                        ? stockMovements 
+                        : stockMovements.filter(m => selectedProductIds.includes(m.productId));
+
+                    const lotes = {};
+                    movementsToProcess.forEach(m => {
+                        if (!m.batch) return;
+                        const key = `${m.productId}-${m.batch}`;
+                        if (!lotes[key]) {
+                            lotes[key] = { productName: m.productName, batch: m.batch, entrada: 0, saida: 0 };
+                        }
+                        if (m.type === 'entrada') lotes[key].entrada += m.quantity;
+                        else lotes[key].saida += m.quantity;
+                    });
+                    Object.values(lotes).forEach(lote => {
+                         html += `<tr class="border-b">
+                            <td class="p-2">${lote.productName}</td>
+                            <td class="p-2 font-mono">${lote.batch}</td>
+                            <td class="p-2 text-green-600">${lote.entrada}</td>
+                            <td class="p-2 text-red-600">${lote.saida}</td>
+                            <td class="p-2 font-bold">${lote.entrada - lote.saida}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    break;
+            }
+            reportContent.innerHTML = html;
+        }
+
+        function populateReportFilters() {
+            // This is now handled by the report multi-select component
+        }
+
+
+        // --- Movements ---
+        function renderMovements() {
+            const type = moveTypeFilter.value;
+            const productIds = selectedMovementProducts;
+            const startDateVal = moveDateStartFilter.value;
+            const endDateVal = moveDateEndFilter.value;
+
+            const startDate = startDateVal ? new Date(startDateVal + "T00:00:00") : null;
+            const endDate = endDateVal ? new Date(endDateVal + "T23:59:59") : null;
+
+            const filtered = stockMovements.filter(m => {
+                const matchType = type === 'all' || m.type === type;
+                const matchProduct = productIds.length === 0 || productIds.includes(m.productId);
+                const matchDate = (!startDate || m.timestamp >= startDate) && (!endDate || m.timestamp <= endDate);
+                return matchType && matchProduct && matchDate;
+            });
+
+            movementsTableBody.innerHTML = '';
+            filtered.forEach(move => {
+                const row = document.createElement('tr');
+                row.className = 'border-b hover:bg-gray-50';
+                const typeClass = move.type === 'entrada' ? 'text-green-600' : 'text-red-600';
+                row.innerHTML = `
+                    <td class="p-4">${move.productName}</td>
+                    <td class="p-4 font-medium ${typeClass}">${move.type.charAt(0).toUpperCase() + move.type.slice(1)}</td>
+                    <td class="p-4">${move.quantity}</td>
+                    <td class="p-4">${move.unit || ''}</td>
+                    <td class="p-4">${move.batch || ''}</td>
+                    <td class="p-4">${move.responsible || ''}</td>
+                    <td class="p-4 text-sm text-gray-500">${new Date(move.date).toLocaleDateString('pt-BR')}</td>
+                `;
+                movementsTableBody.appendChild(row);
+            });
+        }
+        
+        function populateMovementFilters() {
+            // This is now handled by the multi-select component
+        }
+
+
+        // --- Initial Setup ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderProducts();
+            renderSuppliers();
+            mainNav.addEventListener('click', (e) => {
+                const link = e.target.closest('a');
+                if (link && link.dataset.view) { e.preventDefault(); switchView(link.dataset.view); }
+            });
+            productTableBody.addEventListener('click', handleTableActions);
+            supplierTableBody.addEventListener('click', handleTableActions);
+            addUserBtn.addEventListener('click', openAddUserForm);
+            userTableBody.addEventListener('click', handleTableActions);
+            addProductBtn.addEventListener('click', openAddForm);
+            addSupplierBtn.addEventListener('click', openAddSupplierForm);
+            productForm.addEventListener('submit', handleFormSubmit);
+            supplierForm.addEventListener('submit', handleSupplierFormSubmit);
+            userForm.addEventListener('submit', handleUserFormSubmit);
+            cancelProductFormBtn.addEventListener('click', () => closeModal(productFormModal));
+            backProductFormBtn.addEventListener('click', () => closeModal(productFormModal));
+            cancelSupplierFormBtn.addEventListener('click', () => closeModal(supplierFormModal));
+            closeSupplierModalBtn.addEventListener('click', () => closeModal(supplierFormModal));
+            cancelUserFormBtn.addEventListener('click', () => closeModal(userFormModal));
+            closeUserModalBtn.addEventListener('click', () => closeModal(userFormModal));
+            closeQrModalBtn.addEventListener('click', () => closeModal(qrModal));
+            printQrBtn.addEventListener('click', () => window.print());
+            document.getElementById('stock-entry-btn').addEventListener('click', () => openStockMovementModal('entrada'));
+            document.getElementById('stock-exit-btn').addEventListener('click', () => openStockMovementModal('saída'));
+            stockMovementForm.addEventListener('submit', handleStockMovementSubmit);
+            closeMovementModalBtn.addEventListener('click', () => closeModal(stockMovementModal));
+            cancelMovementFormBtn.addEventListener('click', () => closeModal(stockMovementModal));
+            readerModeMoveBtn.addEventListener('click', () => setReaderMode('move'));
+            readerModeLinkBtn.addEventListener('click', () => setReaderMode('link'));
+            linkQrBtn.addEventListener('click', confirmLinkQrCode);
+            geminiDescBtn.addEventListener('click', handleGenerateDescription);
+            clearFilterBtn.addEventListener('click', clearProductFilter);
+            
+            [moveTypeFilter, moveProductFilter, moveDateStartFilter, moveDateEndFilter].forEach(el => {
+                if(el) el.addEventListener('change', renderMovements);
+            });
+            document.querySelectorAll('.report-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => generateReport(e.target.dataset.report));
+            });
+            productFormModal.addEventListener('click', (e) => {
+                if (e.target.classList.contains('tab-button')) {
+                    const tabId = e.target.dataset.tab;
+                    productFormModal.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    productFormModal.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+                    document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+                }
+            });
+            calculateDensityBtn.addEventListener('click', () => {
+                const mass = parseFloat(document.getElementById('mass').value);
+                const volume = parseFloat(document.getElementById('volume').value);
+                const resultContainer = document.getElementById('density-result-container');
+                const resultEl = document.getElementById('density-result');
+
+                if (isNaN(mass) || isNaN(volume) || mass <= 0 || volume <= 0) {
+                    alert("Por favor, insira valores válidos e positivos para massa e volume.");
+                    resultContainer.classList.add('hidden');
+                    return;
+                }
+
+                const density = mass / volume;
+                resultEl.textContent = `${density.toFixed(2)} kg/m³`;
+                resultContainer.classList.remove('hidden');
+            });
+            calculateVolumeBtn.addEventListener('click', () => {
+                const mass = parseFloat(document.getElementById('liquid-mass').value);
+                const density = parseFloat(document.getElementById('product-density-calc').value);
+                const resultContainer = document.getElementById('volume-result-container');
+                const resultEl = document.getElementById('volume-result');
+
+                if (isNaN(mass) || isNaN(density) || mass <= 0 || density <= 0) {
+                    alert("Por favor, insira valores válidos e positivos para peso e densidade.");
+                    resultContainer.classList.add('hidden');
+                    return;
+                }
+
+                const volume = mass / density;
+                resultEl.textContent = `${volume.toFixed(2)} Litros`;
+                resultContainer.classList.remove('hidden');
+            });
+
+            // Multi-select Logic for Reports
+            const setupMultiSelect = (container, inputBox, searchInput, dropdown, selectedItemsArray) => {
+                if (!container) return; // Prevent error if element doesn't exist
+                const populate = (searchTerm = '') => {
+                    dropdown.innerHTML = '';
+                    products
+                        .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                        .forEach(p => {
+                            const isSelected = selectedItemsArray.includes(p.id);
+                            const option = document.createElement('div');
+                            option.className = 'p-2 hover:bg-gray-100 cursor-pointer flex items-center';
+                            option.dataset.id = p.id;
+                            option.innerHTML = `<input type="checkbox" class="mr-2 pointer-events-none" ${isSelected ? 'checked' : ''}> ${p.name}`;
+                            dropdown.appendChild(option);
+                        });
+                };
+
+                const updateTags = () => {
+                    const existingTags = inputBox.querySelectorAll('.tag');
+                    existingTags.forEach(t => t.remove());
+                    selectedItemsArray.forEach(id => {
+                        const product = products.find(p => p.id === id);
+                        if (product) {
+                            const tag = document.createElement('span');
+                            tag.className = 'tag bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1';
+                            tag.innerHTML = `<span>${product.name}</span><button data-id="${id}" class="remove-tag-btn font-bold">x</button>`;
+                            inputBox.prepend(tag);
+                        }
+                    });
+                };
+
+                inputBox.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('remove-tag-btn')) {
+                        const idToRemove = parseInt(e.target.dataset.id);
+                        const index = selectedItemsArray.indexOf(idToRemove);
+                        if (index > -1) selectedItemsArray.splice(index, 1);
+                        updateTags();
+                        return;
+                    }
+                    dropdown.classList.toggle('hidden');
+                    if (!dropdown.classList.contains('hidden')) {
+                        populate();
+                        searchInput.focus();
+                    }
+                });
+
+                searchInput.addEventListener('input', (e) => {
+                    populate(e.target.value);
+                });
+
+                dropdown.addEventListener('click', (e) => {
+                    const option = e.target.closest('div');
+                    if (option && option.dataset.id) {
+                        const id = parseInt(option.dataset.id);
+                        const index = selectedItemsArray.indexOf(id);
+                        if (index > -1) {
+                            selectedItemsArray.splice(index, 1);
+                        } else {
+                            selectedItemsArray.push(id);
+                        }
+                        updateTags();
+                        populate(searchInput.value);
+                    }
+                });
+                 document.addEventListener('click', (e) => {
+                    if (container && !container.contains(e.target)) {
+                        dropdown.classList.add('hidden');
+                    }
+                });
+            };
+            
+            setupMultiSelect(reportMultiSelectContainer, reportMultiSelectInputBox, reportMultiSelectSearch, reportMultiSelectDropdown, selectedReportProducts);
+        });
+    </script>
+</body>
+</html>
